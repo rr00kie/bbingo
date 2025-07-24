@@ -176,6 +176,11 @@
             font-weight: bold;
         }
 
+        .bingo-cell.line-complete {
+            background-color: var(--highlight-color);
+            color: #2c3e50;
+        }
+
         .current-topic-display {
             font-size: 1.5em;
             font-weight: bold;
@@ -345,13 +350,17 @@
                 <h2 id="game-state-title">대기 중...</h2>
                 <div id="current-topic-display" class="glass-card"></div>
                 <div id="bingo-grid"></div>
+                <div id="admin-monitor-view" class="hidden" style="text-align: center;">
+                    <h3>관리자 모니터링 중</h3>
+                    <p>실시간 게임 현황을 확인하고 있습니다.</p>
+                </div>
             </div>
 
             <!-- Right Panel (Player List / Leaderboard) -->
             <div id="right-panel" class="glass-card">
                 <h3>실시간 순위</h3>
                 <ul id="leaderboard" class="leaderboard"></ul>
-                <h3 style="margin-top: 20px;">참가자 목록 (<span id="online-player-count">0</span>/100)</h3>
+                <h3 style="margin-top: 20px;">참가자 목록 (<span id="online-player-count">0</span>)</h3>
                 <ul id="player-list" class="player-list"></ul>
             </div>
         </div>
@@ -412,6 +421,7 @@
             gameStateTitle: document.getElementById('game-state-title'),
             currentTopicDisplay: document.getElementById('current-topic-display'),
             bingoGrid: document.getElementById('bingo-grid'),
+            adminMonitorView: document.getElementById('admin-monitor-view'),
             leaderboard: document.getElementById('leaderboard'),
             playerList: document.getElementById('player-list'),
             playerCount: document.getElementById('player-count'),
@@ -447,7 +457,6 @@
                 if (state.audioContext) return;
                 try {
                     state.audioContext = new (window.AudioContext || window.webkitAudioContext)();
-                    // Load all sounds
                     for (const key in SOUNDS) {
                         const response = await fetch(SOUNDS[key]);
                         const arrayBuffer = await response.arrayBuffer();
@@ -460,12 +469,9 @@
 
             static play(soundName) {
                 if (state.isMuted || !state.audioContext || !state.soundBuffers[soundName]) return;
-                
-                // Resume context if it's suspended
                 if (state.audioContext.state === 'suspended') {
                     state.audioContext.resume();
                 }
-
                 const source = state.audioContext.createBufferSource();
                 source.buffer = state.soundBuffers[soundName];
                 source.connect(state.audioContext.destination);
@@ -484,39 +490,27 @@
                 state.db = firebase.database();
                 state.auth = firebase.auth();
                 
-                // Firebase 연결 상태 감지
                 const connectedRef = firebase.database().ref(".info/connected");
                 connectedRef.on("value", (snap) => {
-                    if (snap.val() === true) {
-                        dom.connectionStatus.className = 'connection-status connected';
-                        dom.connectionText.textContent = '온라인';
-                    } else {
-                        dom.connectionStatus.className = 'connection-status disconnected';
-                        dom.connectionText.textContent = '연결 끊김';
-                    }
+                    const status = snap.val() ? { class: 'connected', text: '온라인' } : { class: 'disconnected', text: '연결 끊김' };
+                    dom.connectionStatus.className = `connection-status ${status.class}`;
+                    dom.connectionText.textContent = status.text;
                 });
 
-                firebase.auth().signInAnonymously()
-                    .catch(error => {
-                        console.error("Anonymous sign-in failed:", error);
-                        alert("Firebase 인증에 실패했습니다. Firebase 콘솔에서 'Authentication > Sign-in method'로 이동하여 '익명' 로그인을 활성화했는지 확인해주세요.");
-                        dom.connectionText.textContent = '인증 실패';
-                    });
+                firebase.auth().signInAnonymously().catch(error => {
+                    console.error("Anonymous sign-in failed:", error);
+                    alert("Firebase 인증에 실패했습니다. Firebase 콘솔에서 'Authentication > Sign-in method'로 이동하여 '익명' 로그인을 활성화했는지 확인해주세요.");
+                    dom.connectionText.textContent = '인증 실패';
+                });
                 
                 firebase.auth().onAuthStateChanged(user => {
                     if (user) {
                         state.user = user;
-                        console.log("Authenticated anonymously with UID:", user.uid);
-                        // Enable buttons after authentication
-                        dom.adminModeBtn.disabled = false;
-                        dom.playerModeBtn.disabled = false;
+                        [dom.adminModeBtn, dom.playerModeBtn].forEach(btn => btn.disabled = false);
                     } else {
-                        console.log("User is signed out.");
-                        dom.adminModeBtn.disabled = true;
-                        dom.playerModeBtn.disabled = true;
+                        [dom.adminModeBtn, dom.playerModeBtn].forEach(btn => btn.disabled = true);
                     }
                 });
-                
                 return true;
             } catch (error) {
                 console.error("Firebase initialization failed:", error);
@@ -532,13 +526,8 @@
         }
 
         function updateLeaderboard(players) {
-            const sortedPlayers = Object.values(players)
-                .sort((a, b) => {
-                    if (b.bingoLines !== a.bingoLines) {
-                        return b.bingoLines - a.bingoLines;
-                    }
-                    return a.lastBingoTime - b.lastBingoTime;
-                });
+            const sortedPlayers = Object.values(players || {})
+                .sort((a, b) => (b.bingoLines - a.bingoLines) || (a.lastBingoTime - b.lastBingoTime));
 
             dom.leaderboard.innerHTML = '';
             let rank = 1;
@@ -556,15 +545,16 @@
 
         function updatePlayerList(players) {
             dom.playerList.innerHTML = '';
+            const playerArray = Object.values(players || {});
             let onlineCount = 0;
-            Object.values(players).forEach(player => {
+            playerArray.forEach(player => {
                 const li = document.createElement('li');
                 const statusClass = player.isOnline ? '' : 'offline';
                 li.innerHTML = `<span style="display:flex; align-items:center;"><span class="player-status ${statusClass}"></span>${player.name}</span>`;
                 dom.playerList.appendChild(li);
                 if(player.isOnline) onlineCount++;
             });
-            dom.playerCount.textContent = Object.keys(players).length;
+            dom.playerCount.textContent = playerArray.length;
             dom.onlinePlayerCount.textContent = onlineCount;
         }
 
@@ -630,7 +620,19 @@
                 players: {}
             });
             
-            joinGame(state.roomId, "관리자");
+            setupAdminView();
+        }
+
+        function setupAdminView() {
+            showScreen(dom.gameScreen);
+            dom.adminControls.classList.remove('hidden');
+            dom.playerInfo.classList.add('hidden');
+            dom.bingoGrid.classList.add('hidden');
+            dom.adminMonitorView.classList.remove('hidden');
+
+            const shareLink = `${window.location.href.split('?')[0]}?room=${state.roomId}`;
+            dom.shareLinkInput.value = shareLink;
+            attachListeners();
         }
 
         function joinGame(roomId, playerName) {
@@ -648,15 +650,10 @@
                 }
 
                 showScreen(dom.gameScreen);
-                if (state.isAdmin) {
-                    dom.adminControls.classList.remove('hidden');
-                    dom.playerInfo.classList.add('hidden');
-                    const shareLink = `${window.location.href.split('?')[0]}?room=${state.roomId}`;
-                    dom.shareLinkInput.value = shareLink;
-                } else {
-                    dom.adminControls.classList.add('hidden');
-                    dom.playerInfo.classList.remove('hidden');
-                }
+                dom.adminControls.classList.add('hidden');
+                dom.playerInfo.classList.remove('hidden');
+                dom.bingoGrid.classList.remove('hidden');
+                dom.adminMonitorView.classList.add('hidden');
 
                 const card = generateBingoCard();
                 state.playerData = {
@@ -681,7 +678,8 @@
         }
         
         function attachListeners() {
-            // Config listener
+            if (state.listeners.config) return; // 이미 리스너가 연결된 경우 중복 방지
+
             const configRef = state.gameRef.child('config');
             configRef.on('value', (snapshot) => {
                 const config = snapshot.val();
@@ -712,21 +710,20 @@
             });
             state.listeners.config = configRef;
 
-            // Topics listener
             const topicsRef = state.gameRef.child('topics');
             topicsRef.on('value', (snapshot) => {
                 const topics = snapshot.val();
                 if (!topics) return;
                 dom.currentTopicDisplay.textContent = topics.currentTopic;
-                updateBingoGrid(topics.calledTopics);
+                if (!state.isAdmin) {
+                    updateBingoGrid(topics.calledTopics);
+                }
             });
             state.listeners.topics = topicsRef;
 
-            // Players listener
             const playersRef = state.gameRef.child('players');
             playersRef.on('value', (snapshot) => {
                 const players = snapshot.val();
-                if (!players) return;
                 updatePlayerList(players);
                 updateLeaderboard(players);
             });
@@ -737,29 +734,42 @@
             if (!state.playerData) return;
             
             const card = state.playerData.card;
+            const completedCellsInLines = new Set();
             let lines = 0;
             
-            // Rows and Columns
+            // Rows
             for (let i = 0; i < 5; i++) {
-                let rowComplete = true;
-                let colComplete = true;
-                for (let j = 0; j < 5; j++) {
-                    if (!calledTopics.includes(card[i][j])) rowComplete = false;
-                    if (!calledTopics.includes(card[j][i])) colComplete = false;
+                if (card[i].every(topic => calledTopics.includes(topic))) {
+                    lines++;
+                    card[i].forEach(topic => completedCellsInLines.add(topic));
                 }
-                if (rowComplete) lines++;
-                if (colComplete) lines++;
+            }
+
+            // Columns
+            for (let j = 0; j < 5; j++) {
+                if (card.every(row => calledTopics.includes(row[j]))) {
+                    lines++;
+                    for(let i = 0; i < 5; i++) completedCellsInLines.add(card[i][j]);
+                }
             }
 
             // Diagonals
-            let diag1Complete = true;
-            let diag2Complete = true;
-            for (let i = 0; i < 5; i++) {
-                if (!calledTopics.includes(card[i][i])) diag1Complete = false;
-                if (!calledTopics.includes(card[i][4 - i])) diag2Complete = false;
+            if (Array.from({length: 5}, (_, i) => card[i][i]).every(topic => calledTopics.includes(topic))) {
+                lines++;
+                for(let i = 0; i < 5; i++) completedCellsInLines.add(card[i][i]);
             }
-            if (diag1Complete) lines++;
-            if (diag2Complete) lines++;
+            if (Array.from({length: 5}, (_, i) => card[i][4-i]).every(topic => calledTopics.includes(topic))) {
+                lines++;
+                for(let i = 0; i < 5; i++) completedCellsInLines.add(card[i][4-i]);
+            }
+
+            document.querySelectorAll('.bingo-cell').forEach(cell => {
+                if (completedCellsInLines.has(cell.dataset.topic)) {
+                    cell.classList.add('line-complete');
+                } else {
+                    cell.classList.remove('line-complete');
+                }
+            });
 
             if (lines > state.playerData.bingoLines) {
                 SoundManager.play('line');
@@ -774,7 +784,7 @@
                 
                 state.gameRef.child('config').once('value', (snapshot) => {
                     const config = snapshot.val();
-                    if (lines >= config.requiredLines) {
+                    if (config.gameState === 'playing' && lines >= config.requiredLines) {
                         state.gameRef.child('config').update({
                             gameState: 'finished',
                             winner: state.playerData.name,
@@ -846,11 +856,12 @@
             dom.requiredLinesValue.textContent = e.target.value;
         });
         dom.requiredLinesSlider.addEventListener('change', (e) => {
-            state.gameRef.child('config/requiredLines').set(parseInt(e.target.value, 10));
+            if(state.isAdmin) {
+                state.gameRef.child('config/requiredLines').set(parseInt(e.target.value, 10));
+            }
         });
 
         dom.copyLinkBtn.addEventListener('click', () => {
-            dom.shareLinkInput.select();
             navigator.clipboard.writeText(dom.shareLinkInput.value).then(() => {
                 alert('참가 링크가 복사되었습니다!');
             });
@@ -889,7 +900,7 @@
             if (roomIdFromUrl) {
                 showScreen(dom.playerNameScreen);
                 dom.roomCodeInput.value = roomIdFromUrl.toUpperCase();
-                dom.playerNameInput.focus(); // 이름 입력란에 포커스
+                dom.playerNameInput.focus();
             }
         }
 
