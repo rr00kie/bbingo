@@ -7,6 +7,7 @@
     <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-app.js"></script>
     <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-auth.js"></script>
     <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-database.js"></script>
+    <script src="firebase-config.js"></script>
     <style>
         :root {
             --primary-color: #8e44ad;
@@ -218,34 +219,6 @@
             display: none !important;
         }
 
-        .modal {
-            position: fixed;
-            top: 0;
-            left: 0;
-            width: 100%;
-            height: 100%;
-            background: rgba(0,0,0,0.7);
-            display: flex;
-            justify-content: center;
-            align-items: center;
-            z-index: 1000;
-        }
-
-        .modal-content {
-            width: 90%;
-            max-width: 500px;
-        }
-        
-        .modal-content textarea {
-            width: 100%;
-            height: 200px;
-            margin-bottom: 15px;
-            background: #333;
-            color: #fff;
-            border: 1px solid #555;
-            border-radius: 8px;
-        }
-
         .sound-toggle {
             position: fixed;
             top: 15px;
@@ -315,16 +288,6 @@
     <div id="sound-toggle" class="sound-toggle">🔇</div>
     
     <div class="container">
-        <!-- Firebase Config Modal -->
-        <div id="firebase-config-modal" class="modal hidden">
-            <div class="modal-content glass-card">
-                <h2>Firebase 설정</h2>
-                <p>Firebase 프로젝트에서 웹 앱의 `firebaseConfig` 객체를 복사하여 아래에 붙여넣어 주세요.</p>
-                <textarea id="firebase-config-input" placeholder="const firebaseConfig = { ... };"></textarea>
-                <button id="save-firebase-config" class="btn">저장 및 연결</button>
-            </div>
-        </div>
-
         <!-- Initial Screen -->
         <div id="initial-screen">
             <div class="glass-card">
@@ -458,9 +421,6 @@
             myRank: document.getElementById('my-rank'),
             soundToggle: document.getElementById('sound-toggle'),
             celebration: document.getElementById('celebration'),
-            firebaseConfigModal: document.getElementById('firebase-config-modal'),
-            firebaseConfigInput: document.getElementById('firebase-config-input'),
-            saveFirebaseConfigBtn: document.getElementById('save-firebase-config'),
             connectionStatus: document.getElementById('connection-status'),
             connectionText: document.getElementById('connection-text'),
         };
@@ -557,8 +517,6 @@
                     }
                 });
                 
-                localStorage.setItem('firebaseConfig', JSON.stringify(config));
-                dom.firebaseConfigModal.classList.add('hidden');
                 return true;
             } catch (error) {
                 console.error("Firebase initialization failed:", error);
@@ -906,37 +864,32 @@
             }
         });
         
-        dom.saveFirebaseConfigBtn.addEventListener('click', () => {
-            try {
-                // A bit of cleaning to allow direct paste from Firebase console
-                const configStr = dom.firebaseConfigInput.value
-                    .replace('const firebaseConfig =', '')
-                    .replace(';', '')
-                    .trim();
-                const config = new Function('return ' + configStr)();
-                if (initFirebase(config)) {
-                    alert("Firebase 연결 성공!");
-                }
-            } catch (e) {
-                alert("잘못된 형식입니다. Firebase 구성 객체를 정확히 붙여넣어 주세요.");
-                console.error(e);
-            }
-        });
-
         // --- Initialization ---
         function initializeApp() {
+            if (typeof window.firebaseConfig === 'undefined' || Object.keys(window.firebaseConfig).length === 0 || !window.firebaseConfig.apiKey || window.firebaseConfig.apiKey === "YOUR_API_KEY") {
+                document.body.innerHTML = `
+                    <div style="position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: linear-gradient(135deg, #4e54c8, #8f94fb); color: white; display: flex; justify-content: center; align-items: center; text-align: center; font-family: sans-serif;">
+                        <div style="background: rgba(0,0,0,0.3); padding: 40px; border-radius: 16px;">
+                            <h1>🔥 Firebase 설정 필요</h1>
+                            <p style="max-width: 500px; margin-top: 20px; line-height: 1.6;">
+                                이 빙고 게임을 실행하려면 <code>firebase-config.js</code> 파일을 수정해야 합니다.<br/><br/>
+                                Firebase Console에서 복사한 구성 객체를<br/>
+                                <code>firebase-config.js</code> 파일에 붙여넣어 주세요.
+                            </p>
+                        </div>
+                    </div>
+                `;
+                return;
+            }
+
+            initFirebase(window.firebaseConfig);
+
             const urlParams = new URLSearchParams(window.location.search);
             const roomIdFromUrl = urlParams.get('room');
             if (roomIdFromUrl) {
                 showScreen(dom.playerNameScreen);
-                dom.roomCodeInput.value = roomIdFromUrl;
-            }
-
-            const savedConfig = localStorage.getItem('firebaseConfig');
-            if (savedConfig) {
-                initFirebase(JSON.parse(savedConfig));
-            } else {
-                dom.firebaseConfigModal.classList.remove('hidden');
+                dom.roomCodeInput.value = roomIdFromUrl.toUpperCase();
+                dom.playerNameInput.focus(); // 이름 입력란에 포커스
             }
         }
 
