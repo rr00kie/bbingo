@@ -364,8 +364,9 @@
                     <button id="start-game-btn" class="btn">게임 시작</button>
                     <button id="reset-game-btn" class="btn btn-secondary">게임 리셋</button>
                     <div style="margin-top: 15px;">
-                        <p><strong>룸 코드:</strong> <span id="room-code-display"></span></p>
-                        <button id="copy-room-code-btn" class="btn" style="font-size: 0.8em; padding: 8px; margin-top: 5px;">코드 복사</button>
+                        <p><strong>참가자 공유 링크:</strong></p>
+                        <input type="text" id="share-link-input" readonly style="margin-bottom: 5px; background: rgba(0,0,0,0.2);">
+                        <button id="copy-link-btn" class="btn" style="font-size: 0.8em; padding: 8px;">링크 복사</button>
                     </div>
                 </div>
                 <div id="player-info">
@@ -443,7 +444,8 @@
             startGameBtn: document.getElementById('start-game-btn'),
             resetGameBtn: document.getElementById('reset-game-btn'),
             roomCodeDisplay: document.getElementById('room-code-display'),
-            copyRoomCodeBtn: document.getElementById('copy-room-code-btn'),
+            copyLinkBtn: document.getElementById('copy-link-btn'),
+            shareLinkInput: document.getElementById('share-link-input'),
             gameStateTitle: document.getElementById('game-state-title'),
             currentTopicDisplay: document.getElementById('current-topic-display'),
             bingoGrid: document.getElementById('bingo-grid'),
@@ -691,7 +693,8 @@
                 if (state.isAdmin) {
                     dom.adminControls.classList.remove('hidden');
                     dom.playerInfo.classList.add('hidden');
-                    dom.roomCodeDisplay.textContent = state.roomId;
+                    const shareLink = `${window.location.href.split('?')[0]}?room=${state.roomId}`;
+                    dom.shareLinkInput.value = shareLink;
                 } else {
                     dom.adminControls.classList.add('hidden');
                     dom.playerInfo.classList.remove('hidden');
@@ -888,9 +891,10 @@
             state.gameRef.child('config/requiredLines').set(parseInt(e.target.value, 10));
         });
 
-        dom.copyRoomCodeBtn.addEventListener('click', () => {
-            navigator.clipboard.writeText(state.roomId).then(() => {
-                alert('룸 코드가 복사되었습니다!');
+        dom.copyLinkBtn.addEventListener('click', () => {
+            dom.shareLinkInput.select();
+            navigator.clipboard.writeText(dom.shareLinkInput.value).then(() => {
+                alert('참가 링크가 복사되었습니다!');
             });
         });
 
@@ -921,6 +925,13 @@
 
         // --- Initialization ---
         function initializeApp() {
+            const urlParams = new URLSearchParams(window.location.search);
+            const roomIdFromUrl = urlParams.get('room');
+            if (roomIdFromUrl) {
+                showScreen(dom.playerNameScreen);
+                dom.roomCodeInput.value = roomIdFromUrl;
+            }
+
             const savedConfig = localStorage.getItem('firebaseConfig');
             if (savedConfig) {
                 initFirebase(JSON.parse(savedConfig));
