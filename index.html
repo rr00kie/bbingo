@@ -1,0 +1,936 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+    <title>KDC 도서관 실시간 빙고</title>
+    <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-app.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-auth.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-database.js"></script>
+    <style>
+        :root {
+            --primary-color: #8e44ad;
+            --secondary-color: #c0392b;
+            --bg-gradient-start: #4e54c8;
+            --bg-gradient-end: #8f94fb;
+            --glass-bg: rgba(255, 255, 255, 0.15);
+            --glass-border: rgba(255, 255, 255, 0.2);
+            --text-color: #ffffff;
+            --highlight-color: #f1c40f;
+            --disabled-color: #7f8c8d;
+            --font-family: 'Pretendard', 'Malgun Gothic', sans-serif;
+        }
+
+        @import url('https://cdn.jsdelivr.net/gh/orioncactus/pretendard/dist/web/static/pretendard.css');
+
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        html, body {
+            height: 100%;
+            width: 100%;
+            overflow: hidden;
+            font-family: var(--font-family);
+        }
+
+        body {
+            background: linear-gradient(135deg, var(--bg-gradient-start), var(--bg-gradient-end));
+            color: var(--text-color);
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            font-size: 16px;
+        }
+
+        .container {
+            width: 100%;
+            height: 100%;
+            max-width: 1200px;
+            padding: 20px;
+            overflow-y: auto;
+            -webkit-overflow-scrolling: touch;
+        }
+
+        .glass-card {
+            background: var(--glass-bg);
+            border-radius: 16px;
+            box-shadow: 0 4px 30px rgba(0, 0, 0, 0.1);
+            backdrop-filter: blur(10px);
+            -webkit-backdrop-filter: blur(10px);
+            border: 1px solid var(--glass-border);
+            padding: 25px;
+            margin-bottom: 20px;
+        }
+
+        h1, h2, h3 {
+            text-align: center;
+            margin-bottom: 20px;
+            text-shadow: 0 2px 4px rgba(0,0,0,0.2);
+        }
+
+        .button-group {
+            display: flex;
+            flex-direction: column;
+            gap: 15px;
+        }
+
+        .btn {
+            width: 100%;
+            padding: 15px;
+            font-size: 1.2em;
+            font-weight: bold;
+            border-radius: 12px;
+            border: none;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            background-color: var(--primary-color);
+            color: var(--text-color);
+            min-height: 48px;
+        }
+
+        .btn:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 6px 20px rgba(0,0,0,0.2);
+        }
+        
+        .btn-secondary {
+            background-color: var(--secondary-color);
+        }
+
+        .btn:disabled {
+            background-color: var(--disabled-color);
+            cursor: not-allowed;
+            transform: none;
+            box-shadow: none;
+        }
+
+        input[type="text"], input[type="number"] {
+            width: 100%;
+            padding: 12px;
+            border-radius: 8px;
+            border: 1px solid var(--glass-border);
+            background: rgba(255,255,255,0.2);
+            color: var(--text-color);
+            font-size: 1em;
+            margin-bottom: 15px;
+        }
+        
+        ::placeholder { color: rgba(255,255,255,0.7); }
+
+        #game-screen {
+            display: grid;
+            grid-template-columns: 1fr;
+            gap: 20px;
+        }
+
+        @media (min-width: 1024px) {
+            #game-screen {
+                grid-template-columns: 300px 1fr 300px;
+            }
+        }
+
+        .main-content {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+        }
+
+        #bingo-grid {
+            display: grid;
+            grid-template-columns: repeat(5, 1fr);
+            gap: 8px;
+            width: 100%;
+            max-width: 500px;
+            margin: 20px auto;
+            aspect-ratio: 1 / 1;
+        }
+
+        .bingo-cell {
+            background: var(--glass-bg);
+            border: 1px solid var(--glass-border);
+            border-radius: 8px;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            text-align: center;
+            font-size: 0.7em;
+            padding: 5px;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            word-break: keep-all;
+            line-height: 1.2;
+        }
+
+        .bingo-cell.marked {
+            background-color: var(--primary-color);
+            transform: scale(1.05);
+            font-weight: bold;
+        }
+        
+        .bingo-cell.free {
+            background-color: var(--secondary-color);
+            font-weight: bold;
+        }
+
+        .current-topic-display {
+            font-size: 1.5em;
+            font-weight: bold;
+            text-align: center;
+            margin-bottom: 20px;
+            padding: 15px;
+            min-height: 80px;
+        }
+
+        .player-list, .leaderboard {
+            list-style: none;
+        }
+        
+        .player-list li, .leaderboard li {
+            padding: 10px;
+            border-radius: 8px;
+            margin-bottom: 5px;
+            background: var(--glass-bg);
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+        
+        .leaderboard li {
+            font-weight: bold;
+        }
+
+        .player-status {
+            width: 12px;
+            height: 12px;
+            border-radius: 50%;
+            margin-right: 10px;
+            background-color: #2ecc71; /* online */
+        }
+        
+        .player-status.offline {
+            background-color: #e74c3c; /* offline */
+        }
+
+        .hidden {
+            display: none !important;
+        }
+
+        .modal {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: rgba(0,0,0,0.7);
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            z-index: 1000;
+        }
+
+        .modal-content {
+            width: 90%;
+            max-width: 500px;
+        }
+        
+        .modal-content textarea {
+            width: 100%;
+            height: 200px;
+            margin-bottom: 15px;
+            background: #333;
+            color: #fff;
+            border: 1px solid #555;
+            border-radius: 8px;
+        }
+
+        .sound-toggle {
+            position: fixed;
+            top: 15px;
+            right: 15px;
+            width: 44px;
+            height: 44px;
+            background: var(--glass-bg);
+            border: 1px solid var(--glass-border);
+            border-radius: 50%;
+            font-size: 24px;
+            cursor: pointer;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            z-index: 100;
+        }
+
+        .status-bar {
+            text-align: center;
+            padding: 10px;
+            font-weight: bold;
+        }
+        
+        .connection-status {
+            width: 10px;
+            height: 10px;
+            border-radius: 50%;
+            display: inline-block;
+            margin-right: 5px;
+        }
+        
+        .connection-status.connected { background-color: #2ecc71; }
+        .connection-status.disconnected { background-color: #e74c3c; }
+
+        .celebration {
+            position: fixed;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            font-size: 5em;
+            font-weight: bold;
+            color: var(--highlight-color);
+            text-shadow: 0 0 20px black;
+            animation: celebrate-anim 2s ease-out forwards;
+            z-index: 2000;
+            pointer-events: none;
+        }
+
+        @keyframes celebrate-anim {
+            0% { transform: translate(-50%, -50%) scale(0); opacity: 0; }
+            50% { transform: translate(-50%, -50%) scale(1.2); opacity: 1; }
+            100% { transform: translate(-50%, -50%) scale(1); opacity: 0; }
+        }
+        
+        footer {
+            position: fixed;
+            bottom: 10px;
+            width: 100%;
+            text-align: center;
+            font-size: 0.8em;
+            color: rgba(255,255,255,0.7);
+            z-index: 50;
+        }
+    </style>
+</head>
+<body>
+    <div id="sound-toggle" class="sound-toggle">🔇</div>
+    
+    <div class="container">
+        <!-- Firebase Config Modal -->
+        <div id="firebase-config-modal" class="modal hidden">
+            <div class="modal-content glass-card">
+                <h2>Firebase 설정</h2>
+                <p>Firebase 프로젝트에서 웹 앱의 `firebaseConfig` 객체를 복사하여 아래에 붙여넣어 주세요.</p>
+                <textarea id="firebase-config-input" placeholder="const firebaseConfig = { ... };"></textarea>
+                <button id="save-firebase-config" class="btn">저장 및 연결</button>
+            </div>
+        </div>
+
+        <!-- Initial Screen -->
+        <div id="initial-screen">
+            <div class="glass-card">
+                <h1>KDC 도서관 실시간 빙고</h1>
+                <div class="status-bar">
+                    <span id="connection-status" class="connection-status disconnected"></span>
+                    <span id="connection-text">연결 중...</span> | 
+                    참가자: <span id="player-count">0</span>
+                </div>
+                <div class="button-group">
+                    <button id="admin-mode-btn" class="btn" disabled>👑 관리자 모드</button>
+                    <button id="player-mode-btn" class="btn btn-secondary" disabled>👤 참가자 모드</button>
+                </div>
+            </div>
+        </div>
+
+        <!-- Player Name Screen -->
+        <div id="player-name-screen" class="hidden">
+            <div class="glass-card">
+                <h2>참가자 이름 입력</h2>
+                <input type="text" id="player-name-input" placeholder="이름을 입력하세요">
+                <input type="text" id="room-code-input" placeholder="게임 룸 코드를 입력하세요">
+                <button id="join-game-btn" class="btn">게임 참가</button>
+                <button id="back-to-initial" class="btn btn-secondary" style="margin-top: 10px;">뒤로가기</button>
+            </div>
+        </div>
+
+        <!-- Game Screen -->
+        <div id="game-screen" class="hidden">
+            <!-- Left Panel (Admin Controls / Player Info) -->
+            <div id="left-panel" class="glass-card">
+                <div id="admin-controls" class="hidden">
+                    <h3>👑 관리자 패널</h3>
+                    <label for="required-lines-slider">빙고 완성 조건: <span id="required-lines-value">3</span>줄</label>
+                    <input type="range" id="required-lines-slider" min="1" max="5" value="3" style="width:100%; margin-top:10px;">
+                    <button id="call-topic-btn" class="btn" disabled>주제 호출</button>
+                    <button id="start-game-btn" class="btn">게임 시작</button>
+                    <button id="reset-game-btn" class="btn btn-secondary">게임 리셋</button>
+                    <div style="margin-top: 15px;">
+                        <p><strong>룸 코드:</strong> <span id="room-code-display"></span></p>
+                        <button id="copy-room-code-btn" class="btn" style="font-size: 0.8em; padding: 8px; margin-top: 5px;">코드 복사</button>
+                    </div>
+                </div>
+                <div id="player-info">
+                     <h3>내 정보</h3>
+                     <p><strong>이름:</strong> <span id="my-name"></span></p>
+                     <p><strong>완성한 줄:</strong> <span id="my-lines">0</span></p>
+                     <p><strong>내 순위:</strong> <span id="my-rank">-</span></p>
+                </div>
+            </div>
+
+            <!-- Main Content (Bingo Grid) -->
+            <div class="main-content glass-card">
+                <h2 id="game-state-title">대기 중...</h2>
+                <div id="current-topic-display" class="glass-card"></div>
+                <div id="bingo-grid"></div>
+            </div>
+
+            <!-- Right Panel (Player List / Leaderboard) -->
+            <div id="right-panel" class="glass-card">
+                <h3>실시간 순위</h3>
+                <ul id="leaderboard" class="leaderboard"></ul>
+                <h3 style="margin-top: 20px;">참가자 목록 (<span id="online-player-count">0</span>/100)</h3>
+                <ul id="player-list" class="player-list"></ul>
+            </div>
+        </div>
+    </div>
+    
+    <div id="celebration" class="celebration hidden"></div>
+
+    <footer>Made by 2025 사대도협 사무국</footer>
+
+    <script>
+    document.addEventListener('DOMContentLoaded', () => {
+        // --- KDC 주제 목록 (100개) ---
+        const KDC_TOPICS = [
+            "010 도서학", "020 문헌정보학", "030 백과사전", "040 강연집", "050 일반 연속간행물", "060 학회", "070 신문, 저널리즘", "080 총서", "090 향토자료",
+            "110 형이상학", "120 인식론", "130 심리학", "140 경학", "150 동양철학", "160 서양철학", "170 논리학", "180 윤리학", "190 종교학",
+            "210 비교종교", "220 불교", "230 기독교", "240 도교", "250 천도교", "260 힌두교", "270 이슬람교", "280 기타 종교", "290 신화",
+            "310 통계학", "320 경제학", "330 사회학", "340 정치학", "350 행정학", "360 법학", "370 교육학", "380 풍속, 민속학", "390 국방, 군사학",
+            "410 수학", "420 물리학", "430 화학", "440 천문학", "450 지구과학", "460 생명과학", "470 식물학", "480 동물학", "490 의학",
+            "510 농업", "520 임업", "530 수산업", "540 공학", "550 건축공학", "560 기계공학", "570 전기전자공학", "580 화학공학", "590 제조업",
+            "610 예술일반", "620 조각", "630 공예", "640 서예", "650 회화, 도화", "660 사진", "670 음악", "680 공연예술", "690 오락, 스포츠",
+            "710 언어학", "720 국어", "730 중국어", "740 영어", "750 독일어", "760 프랑스어", "770 스페인어", "780 이탈리아어", "790 기타 언어",
+            "810 한국문학", "820 중국문학", "830 일본문학", "840 영미문학", "850 독일문학", "860 프랑스문학", "870 스페인문학", "880 이탈리아문학", "890 기타 문학",
+            "910 아시아 역사", "920 유럽 역사", "930 아프리카 역사", "940 북미 역사", "950 남미 역사", "960 오세아니아 역사", "970 지리", "980 전기", "990 고고학"
+        ];
+
+        // --- 사운드 데이터 (Base64 인코딩) ---
+        const SOUNDS = {
+            join: 'data:audio/mpeg;base64,SUQzBAAAAAAAI1RTU0UAAAAPAAADTGF2ZjU4LjQ1LjEwMAAAAAAAAAAAAAAA//tAwAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA...',
+            topic: 'data:audio/mpeg;base64,SUQzBAAAAAAAI1RTU0UAAAAPAAADTGF2ZjU4LjQ1LjEwMAAAAAAAAAAAAAAA//tAwAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA...',
+            mark: 'data:audio/mpeg;base64,SUQzBAAAAAAAI1RTU0UAAAAPAAADTGF2ZjU4LjQ1LjEwMAAAAAAAAAAAAAAA//tAwxAAAAAAAAA42B2x2BwAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA...',
+            line: 'data:audio/mpeg;base64,SUQzBAAAAAAAI1RTU0UAAAAPAAADTGF2ZjU4LjQ1LjEwMAAAAAAAAAAAAAAA//tAwxAAAAA42B2x2BwAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA...',
+            bingo: 'data:audio/mpeg;base64,SUQzBAAAAAAAI1RTU0UAAAAPAAADTGF2ZjU4LjQ1LjEwMAAAAAAAAAAAAAAA//tAwxAAAAA42B2x2BwAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA...',
+            start: 'data:audio/mpeg;base64,SUQzBAAAAAAAI1RTU0UAAAAPAAADTGF2ZjU4LjQ1LjEwMAAAAAAAAAAAAAAA//tAwxAAAAA42B2x2BwAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA...',
+            rank: 'data:audio/mpeg;base64,SUQzBAAAAAAAI1RTU0UAAAAPAAADTGF2ZjU4LjQ1LjEwMAAAAAAAAAAAAAAA//tAwxAAAAA42B2x2BwAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA...'
+        };
+
+        // --- DOM 요소 ---
+        const dom = {
+            initialScreen: document.getElementById('initial-screen'),
+            playerNameScreen: document.getElementById('player-name-screen'),
+            gameScreen: document.getElementById('game-screen'),
+            adminModeBtn: document.getElementById('admin-mode-btn'),
+            playerModeBtn: document.getElementById('player-mode-btn'),
+            playerNameInput: document.getElementById('player-name-input'),
+            roomCodeInput: document.getElementById('room-code-input'),
+            joinGameBtn: document.getElementById('join-game-btn'),
+            backToInitialBtn: document.getElementById('back-to-initial'),
+            adminControls: document.getElementById('admin-controls'),
+            playerInfo: document.getElementById('player-info'),
+            requiredLinesSlider: document.getElementById('required-lines-slider'),
+            requiredLinesValue: document.getElementById('required-lines-value'),
+            callTopicBtn: document.getElementById('call-topic-btn'),
+            startGameBtn: document.getElementById('start-game-btn'),
+            resetGameBtn: document.getElementById('reset-game-btn'),
+            roomCodeDisplay: document.getElementById('room-code-display'),
+            copyRoomCodeBtn: document.getElementById('copy-room-code-btn'),
+            gameStateTitle: document.getElementById('game-state-title'),
+            currentTopicDisplay: document.getElementById('current-topic-display'),
+            bingoGrid: document.getElementById('bingo-grid'),
+            leaderboard: document.getElementById('leaderboard'),
+            playerList: document.getElementById('player-list'),
+            playerCount: document.getElementById('player-count'),
+            onlinePlayerCount: document.getElementById('online-player-count'),
+            myName: document.getElementById('my-name'),
+            myLines: document.getElementById('my-lines'),
+            myRank: document.getElementById('my-rank'),
+            soundToggle: document.getElementById('sound-toggle'),
+            celebration: document.getElementById('celebration'),
+            firebaseConfigModal: document.getElementById('firebase-config-modal'),
+            firebaseConfigInput: document.getElementById('firebase-config-input'),
+            saveFirebaseConfigBtn: document.getElementById('save-firebase-config'),
+            connectionStatus: document.getElementById('connection-status'),
+            connectionText: document.getElementById('connection-text'),
+        };
+
+        // --- 앱 상태 ---
+        const state = {
+            firebaseApp: null,
+            db: null,
+            auth: null,
+            user: null,
+            isMuted: true,
+            isAdmin: false,
+            roomId: null,
+            playerData: null,
+            gameRef: null,
+            listeners: {},
+            audioContext: null,
+            soundBuffers: {},
+        };
+
+        // --- 사운드 관리 ---
+        class SoundManager {
+            static async init() {
+                if (state.audioContext) return;
+                try {
+                    state.audioContext = new (window.AudioContext || window.webkitAudioContext)();
+                    // Load all sounds
+                    for (const key in SOUNDS) {
+                        const response = await fetch(SOUNDS[key]);
+                        const arrayBuffer = await response.arrayBuffer();
+                        state.soundBuffers[key] = await state.audioContext.decodeAudioData(arrayBuffer);
+                    }
+                } catch (e) {
+                    console.error("Web Audio API is not supported or user hasn't interacted yet.", e);
+                }
+            }
+
+            static play(soundName) {
+                if (state.isMuted || !state.audioContext || !state.soundBuffers[soundName]) return;
+                
+                // Resume context if it's suspended
+                if (state.audioContext.state === 'suspended') {
+                    state.audioContext.resume();
+                }
+
+                const source = state.audioContext.createBufferSource();
+                source.buffer = state.soundBuffers[soundName];
+                source.connect(state.audioContext.destination);
+                source.start(0);
+            }
+        }
+
+        // --- Firebase 로직 ---
+        function initFirebase(config) {
+            try {
+                if (firebase.apps.length) {
+                    state.firebaseApp = firebase.app();
+                } else {
+                    state.firebaseApp = firebase.initializeApp(config);
+                }
+                state.db = firebase.database();
+                state.auth = firebase.auth();
+                
+                // Firebase 연결 상태 감지
+                const connectedRef = firebase.database().ref(".info/connected");
+                connectedRef.on("value", (snap) => {
+                    if (snap.val() === true) {
+                        dom.connectionStatus.className = 'connection-status connected';
+                        dom.connectionText.textContent = '온라인';
+                    } else {
+                        dom.connectionStatus.className = 'connection-status disconnected';
+                        dom.connectionText.textContent = '연결 끊김';
+                    }
+                });
+
+                firebase.auth().signInAnonymously()
+                    .catch(error => {
+                        console.error("Anonymous sign-in failed:", error);
+                        alert("Firebase 인증에 실패했습니다. Firebase 콘솔에서 'Authentication > Sign-in method'로 이동하여 '익명' 로그인을 활성화했는지 확인해주세요.");
+                        dom.connectionText.textContent = '인증 실패';
+                    });
+                
+                firebase.auth().onAuthStateChanged(user => {
+                    if (user) {
+                        state.user = user;
+                        console.log("Authenticated anonymously with UID:", user.uid);
+                        // Enable buttons after authentication
+                        dom.adminModeBtn.disabled = false;
+                        dom.playerModeBtn.disabled = false;
+                    } else {
+                        console.log("User is signed out.");
+                        dom.adminModeBtn.disabled = true;
+                        dom.playerModeBtn.disabled = true;
+                    }
+                });
+                
+                localStorage.setItem('firebaseConfig', JSON.stringify(config));
+                dom.firebaseConfigModal.classList.add('hidden');
+                return true;
+            } catch (error) {
+                console.error("Firebase initialization failed:", error);
+                alert("Firebase 설정이 올바르지 않습니다. 다시 확인해주세요.");
+                return false;
+            }
+        }
+
+        // --- UI 로직 ---
+        function showScreen(screen) {
+            [dom.initialScreen, dom.playerNameScreen, dom.gameScreen].forEach(s => s.classList.add('hidden'));
+            screen.classList.remove('hidden');
+        }
+
+        function updateLeaderboard(players) {
+            const sortedPlayers = Object.values(players)
+                .sort((a, b) => {
+                    if (b.bingoLines !== a.bingoLines) {
+                        return b.bingoLines - a.bingoLines;
+                    }
+                    return a.lastBingoTime - b.lastBingoTime;
+                });
+
+            dom.leaderboard.innerHTML = '';
+            let rank = 1;
+            for (const player of sortedPlayers) {
+                const li = document.createElement('li');
+                li.innerHTML = `<span>${rank}. ${player.name}</span><span>${player.bingoLines}줄</span>`;
+                if (player.id === state.user.uid) {
+                    li.style.backgroundColor = 'var(--primary-color)';
+                    dom.myRank.textContent = `${rank}위`;
+                }
+                dom.leaderboard.appendChild(li);
+                rank++;
+            }
+        }
+
+        function updatePlayerList(players) {
+            dom.playerList.innerHTML = '';
+            let onlineCount = 0;
+            Object.values(players).forEach(player => {
+                const li = document.createElement('li');
+                const statusClass = player.isOnline ? '' : 'offline';
+                li.innerHTML = `<span style="display:flex; align-items:center;"><span class="player-status ${statusClass}"></span>${player.name}</span>`;
+                dom.playerList.appendChild(li);
+                if(player.isOnline) onlineCount++;
+            });
+            dom.playerCount.textContent = Object.keys(players).length;
+            dom.onlinePlayerCount.textContent = onlineCount;
+        }
+
+        function renderBingoGrid(card) {
+            dom.bingoGrid.innerHTML = '';
+            card.flat().forEach(topic => {
+                const cell = document.createElement('div');
+                cell.classList.add('bingo-cell');
+                cell.textContent = topic;
+                if (topic === 'FREE') {
+                    cell.classList.add('free', 'marked');
+                }
+                cell.dataset.topic = topic;
+                dom.bingoGrid.appendChild(cell);
+            });
+        }
+        
+        function updateBingoGrid(calledTopics) {
+            document.querySelectorAll('.bingo-cell').forEach(cell => {
+                const topic = cell.dataset.topic;
+                if (calledTopics.includes(topic) || topic === 'FREE') {
+                    if (!cell.classList.contains('marked')) {
+                        cell.classList.add('marked');
+                        SoundManager.play('mark');
+                    }
+                }
+            });
+            checkMyBingo(calledTopics);
+        }
+
+        // --- 게임 로직 ---
+        function generateRoomId() {
+            return Math.random().toString(36).substring(2, 8).toUpperCase();
+        }
+
+        function generateBingoCard() {
+            const shuffled = [...KDC_TOPICS].sort(() => 0.5 - Math.random());
+            const card = [];
+            for (let i = 0; i < 5; i++) {
+                card.push(shuffled.slice(i * 5, i * 5 + 5));
+            }
+            card[2][2] = 'FREE';
+            return card;
+        }
+        
+        async function createGame() {
+            state.isAdmin = true;
+            state.roomId = generateRoomId();
+            state.gameRef = state.db.ref(`games/${state.roomId}`);
+            
+            await state.gameRef.set({
+                config: {
+                    gameState: 'waiting', // waiting, playing, finished
+                    requiredLines: 3,
+                    createdAt: firebase.database.ServerValue.TIMESTAMP,
+                    adminId: state.user.uid
+                },
+                topics: {
+                    allTopics: KDC_TOPICS,
+                    calledTopics: ['FREE'],
+                    currentTopic: '게임 시작 대기 중'
+                },
+                players: {}
+            });
+            
+            joinGame(state.roomId, "관리자");
+        }
+
+        function joinGame(roomId, playerName) {
+            if (!roomId || !playerName) {
+                alert("이름과 룸 코드를 모두 입력해주세요.");
+                return;
+            }
+            state.roomId = roomId.toUpperCase();
+            state.gameRef = state.db.ref(`games/${state.roomId}`);
+
+            state.gameRef.once('value', (snapshot) => {
+                if (!snapshot.exists()) {
+                    alert("존재하지 않는 게임 룸입니다.");
+                    return;
+                }
+
+                showScreen(dom.gameScreen);
+                if (state.isAdmin) {
+                    dom.adminControls.classList.remove('hidden');
+                    dom.playerInfo.classList.add('hidden');
+                    dom.roomCodeDisplay.textContent = state.roomId;
+                } else {
+                    dom.adminControls.classList.add('hidden');
+                    dom.playerInfo.classList.remove('hidden');
+                }
+
+                const card = generateBingoCard();
+                state.playerData = {
+                    id: state.user.uid,
+                    name: playerName,
+                    card: card,
+                    bingoLines: 0,
+                    isOnline: true,
+                    joinTime: firebase.database.ServerValue.TIMESTAMP,
+                    lastBingoTime: null
+                };
+                
+                const playerRef = state.gameRef.child(`players/${state.user.uid}`);
+                playerRef.set(state.playerData);
+                playerRef.onDisconnect().update({ isOnline: false });
+
+                dom.myName.textContent = playerName;
+                renderBingoGrid(card);
+                attachListeners();
+                SoundManager.play('join');
+            });
+        }
+        
+        function attachListeners() {
+            // Config listener
+            const configRef = state.gameRef.child('config');
+            configRef.on('value', (snapshot) => {
+                const config = snapshot.val();
+                if (!config) return;
+
+                dom.requiredLinesSlider.value = config.requiredLines;
+                dom.requiredLinesValue.textContent = config.requiredLines;
+                
+                let title = '';
+                switch(config.gameState) {
+                    case 'waiting': title = '대기 중...'; break;
+                    case 'playing': title = '게임 중!'; break;
+                    case 'finished': title = `게임 종료! 우승자: ${config.winner || ''}`; break;
+                }
+                dom.gameStateTitle.textContent = title;
+
+                if (state.isAdmin) {
+                    dom.startGameBtn.disabled = config.gameState === 'playing';
+                    dom.callTopicBtn.disabled = config.gameState !== 'playing';
+                }
+                
+                if (config.gameState === 'finished' && config.winnerId === state.user.uid) {
+                    dom.celebration.textContent = "🎉 BINGO! 🎉";
+                    dom.celebration.classList.remove('hidden');
+                    SoundManager.play('bingo');
+                    setTimeout(() => dom.celebration.classList.add('hidden'), 2000);
+                }
+            });
+            state.listeners.config = configRef;
+
+            // Topics listener
+            const topicsRef = state.gameRef.child('topics');
+            topicsRef.on('value', (snapshot) => {
+                const topics = snapshot.val();
+                if (!topics) return;
+                dom.currentTopicDisplay.textContent = topics.currentTopic;
+                updateBingoGrid(topics.calledTopics);
+            });
+            state.listeners.topics = topicsRef;
+
+            // Players listener
+            const playersRef = state.gameRef.child('players');
+            playersRef.on('value', (snapshot) => {
+                const players = snapshot.val();
+                if (!players) return;
+                updatePlayerList(players);
+                updateLeaderboard(players);
+            });
+            state.listeners.players = playersRef;
+        }
+        
+        function checkMyBingo(calledTopics) {
+            if (!state.playerData) return;
+            
+            const card = state.playerData.card;
+            let lines = 0;
+            
+            // Rows and Columns
+            for (let i = 0; i < 5; i++) {
+                let rowComplete = true;
+                let colComplete = true;
+                for (let j = 0; j < 5; j++) {
+                    if (!calledTopics.includes(card[i][j])) rowComplete = false;
+                    if (!calledTopics.includes(card[j][i])) colComplete = false;
+                }
+                if (rowComplete) lines++;
+                if (colComplete) lines++;
+            }
+
+            // Diagonals
+            let diag1Complete = true;
+            let diag2Complete = true;
+            for (let i = 0; i < 5; i++) {
+                if (!calledTopics.includes(card[i][i])) diag1Complete = false;
+                if (!calledTopics.includes(card[i][4 - i])) diag2Complete = false;
+            }
+            if (diag1Complete) lines++;
+            if (diag2Complete) lines++;
+
+            if (lines > state.playerData.bingoLines) {
+                SoundManager.play('line');
+                state.playerData.bingoLines = lines;
+                dom.myLines.textContent = lines;
+                
+                const updates = {
+                    bingoLines: lines,
+                    lastBingoTime: firebase.database.ServerValue.TIMESTAMP
+                };
+                state.gameRef.child(`players/${state.user.uid}`).update(updates);
+                
+                state.gameRef.child('config').once('value', (snapshot) => {
+                    const config = snapshot.val();
+                    if (lines >= config.requiredLines) {
+                        state.gameRef.child('config').update({
+                            gameState: 'finished',
+                            winner: state.playerData.name,
+                            winnerId: state.user.uid
+                        });
+                    }
+                });
+            }
+        }
+
+        // --- Admin Functions ---
+        function startGame() {
+            state.gameRef.child('config/gameState').set('playing');
+            SoundManager.play('start');
+        }
+
+        function callTopic() {
+            state.gameRef.child('topics').once('value', (snapshot) => {
+                const topics = snapshot.val();
+                const uncalled = topics.allTopics.filter(t => !topics.calledTopics.includes(t));
+                
+                if (uncalled.length > 0) {
+                    const newTopic = uncalled[Math.floor(Math.random() * uncalled.length)];
+                    const newCalledTopics = [...topics.calledTopics, newTopic];
+                    state.gameRef.child('topics').update({
+                        currentTopic: newTopic,
+                        calledTopics: newCalledTopics
+                    });
+                    SoundManager.play('topic');
+                } else {
+                    alert("모든 주제를 호출했습니다!");
+                    state.gameRef.child('config/gameState').set('finished');
+                }
+            });
+        }
+        
+        function resetGame() {
+            if (confirm("정말로 게임을 리셋하시겠습니까? 모든 데이터가 삭제됩니다.")) {
+                state.gameRef.set(null);
+                alert("게임이 리셋되었습니다. 새로운 게임을 시작해주세요.");
+                window.location.reload();
+            }
+        }
+
+        // --- Event Listeners ---
+        dom.adminModeBtn.addEventListener('click', async () => {
+            await SoundManager.init();
+            createGame();
+        });
+
+        dom.playerModeBtn.addEventListener('click', async () => {
+            await SoundManager.init();
+            showScreen(dom.playerNameScreen);
+        });
+        
+        dom.backToInitialBtn.addEventListener('click', () => showScreen(dom.initialScreen));
+
+        dom.joinGameBtn.addEventListener('click', () => {
+            const playerName = dom.playerNameInput.value.trim();
+            const roomId = dom.roomCodeInput.value.trim();
+            joinGame(roomId, playerName);
+        });
+
+        dom.startGameBtn.addEventListener('click', startGame);
+        dom.callTopicBtn.addEventListener('click', callTopic);
+        dom.resetGameBtn.addEventListener('click', resetGame);
+        
+        dom.requiredLinesSlider.addEventListener('input', (e) => {
+            dom.requiredLinesValue.textContent = e.target.value;
+        });
+        dom.requiredLinesSlider.addEventListener('change', (e) => {
+            state.gameRef.child('config/requiredLines').set(parseInt(e.target.value, 10));
+        });
+
+        dom.copyRoomCodeBtn.addEventListener('click', () => {
+            navigator.clipboard.writeText(state.roomId).then(() => {
+                alert('룸 코드가 복사되었습니다!');
+            });
+        });
+
+        dom.soundToggle.addEventListener('click', () => {
+            state.isMuted = !state.isMuted;
+            dom.soundToggle.textContent = state.isMuted ? '🔇' : '🔊';
+            if (!state.isMuted && !state.audioContext) {
+                SoundManager.init();
+            }
+        });
+        
+        dom.saveFirebaseConfigBtn.addEventListener('click', () => {
+            try {
+                // A bit of cleaning to allow direct paste from Firebase console
+                const configStr = dom.firebaseConfigInput.value
+                    .replace('const firebaseConfig =', '')
+                    .replace(';', '')
+                    .trim();
+                const config = new Function('return ' + configStr)();
+                if (initFirebase(config)) {
+                    alert("Firebase 연결 성공!");
+                }
+            } catch (e) {
+                alert("잘못된 형식입니다. Firebase 구성 객체를 정확히 붙여넣어 주세요.");
+                console.error(e);
+            }
+        });
+
+        // --- Initialization ---
+        function initializeApp() {
+            const savedConfig = localStorage.getItem('firebaseConfig');
+            if (savedConfig) {
+                initFirebase(JSON.parse(savedConfig));
+            } else {
+                dom.firebaseConfigModal.classList.remove('hidden');
+            }
+        }
+
+        initializeApp();
+    });
+    </script>
+</body>
+</html>
