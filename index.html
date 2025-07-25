@@ -182,12 +182,20 @@
         }
 
         .current-topic-display {
-            font-size: 1.5em;
+            font-size: 1.2em; /* 글자 크기 조정 */
             font-weight: bold;
             text-align: center;
             margin-bottom: 20px;
             padding: 15px;
             min-height: 80px;
+            transform: translateZ(0); /* 하드웨어 가속 유도 */
+        }
+        
+        .current-topic-display .turn-info {
+            font-size: 0.8em;
+            font-weight: normal;
+            display: block;
+            margin-bottom: 10px;
         }
 
         .player-list, .leaderboard {
@@ -205,6 +213,12 @@
         }
         
         .leaderboard li {
+            font-weight: bold;
+        }
+        
+        .player-list li.current-turn {
+            background-color: var(--highlight-color);
+            color: #2c3e50;
             font-weight: bold;
         }
 
@@ -299,7 +313,7 @@
                 <h1>KDC 도서관 실시간 빙고</h1>
                 <div class="status-bar">
                     <span id="connection-status" class="connection-status disconnected"></span>
-                    <span id="connection-text">연결 중...</span> | 
+                    <span id="connection-text">연결 중...</span> |
                     참가자: <span id="player-count">0</span>
                 </div>
                 <div class="button-group">
@@ -328,7 +342,7 @@
                     <h3>👑 관리자 패널</h3>
                     <label for="required-lines-slider">빙고 완성 조건: <span id="required-lines-value">3</span>줄</label>
                     <input type="range" id="required-lines-slider" min="1" max="5" value="3" style="width:100%; margin-top:10px;">
-                    <button id="call-topic-btn" class="btn" disabled>주제 호출</button>
+                    <button id="call-topic-btn" class="btn" disabled>주제 호출 (참가자 턴)</button>
                     <button id="start-game-btn" class="btn">게임 시작</button>
                     <button id="reset-game-btn" class="btn btn-secondary">게임 리셋</button>
                     <div style="margin-top: 15px;">
@@ -360,7 +374,7 @@
             <div id="right-panel" class="glass-card">
                 <h3>실시간 순위</h3>
                 <ul id="leaderboard" class="leaderboard"></ul>
-                <h3 style="margin-top: 20px;">참가자 목록 (<span id="online-player-count">0</span>)</h3>
+                <h3>참가자 목록 (<span id="online-player-count">0</span>)</h3>
                 <ul id="player-list" class="player-list"></ul>
             </div>
         </div>
@@ -388,13 +402,13 @@
 
         // --- 사운드 데이터 (Base64 인코딩) ---
         const SOUNDS = {
-            join: 'data:audio/mpeg;base64,SUQzBAAAAAAAI1RTU0UAAAAPAAADTGF2ZjU4LjQ1LjEwMAAAAAAAAAAAAAAA//tAwAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA...',
-            topic: 'data:audio/mpeg;base64,SUQzBAAAAAAAI1RTU0UAAAAPAAADTGF2ZjU4LjQ1LjEwMAAAAAAAAAAAAAAA//tAwAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA...',
-            mark: 'data:audio/mpeg;base64,SUQzBAAAAAAAI1RTU0UAAAAPAAADTGF2ZjU4LjQ1LjEwMAAAAAAAAAAAAAAA//tAwxAAAAAAAAA42B2x2BwAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA...',
-            line: 'data:audio/mpeg;base64,SUQzBAAAAAAAI1RTU0UAAAAPAAADTGF2ZjU4LjQ1LjEwMAAAAAAAAAAAAAAA//tAwxAAAAA42B2x2BwAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA...',
-            bingo: 'data:audio/mpeg;base64,SUQzBAAAAAAAI1RTU0UAAAAPAAADTGF2ZjU4LjQ1LjEwMAAAAAAAAAAAAAAA//tAwxAAAAA42B2x2BwAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA...',
-            start: 'data:audio/mpeg;base64,SUQzBAAAAAAAI1RTU0UAAAAPAAADTGF2ZjU4LjQ1LjEwMAAAAAAAAAAAAAAA//tAwxAAAAA42B2x2BwAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA...',
-            rank: 'data:audio/mpeg;base64,SUQzBAAAAAAAI1RTU0UAAAAPAAADTGF2ZjU4LjQ1LjEwMAAAAAAAAAAAAAAA//tAwxAAAAA42B2x2BwAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA...'
+            join: 'data:audio/mp3;base64,SUQzBAAAAAAAI1RTU0UAAAAPAAADTGF2ZjU4LjQ1LjEwMAAAAAAAAAAAAAAA//tAwAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA...',
+            topic: 'data:audio/mp3;base64,SUQzBAAAAAAAI1RTU0UAAAAPAAADTGF2ZjU4LjQ1LjEwMAAAAAAAAAAAAAAA//tAwAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA...',
+            mark: 'data:audio/mp3;base64,SUQzBAAAAAAAI1RTU0UAAAAPAAADTGF2ZjU4LjQ1LjEwMAAAAAAAAAAAAAAA//tAwxAAAAAAAAA42B2x2BwAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA...',
+            line: 'data:audio/mp3;base64,SUQzBAAAAAAAI1RTU0UAAAAPAAADTGF2ZjU4LjQ1LjEwMAAAAAAAAAAAAAAA//tAwxAAAAA42B2x2BwAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA...',
+            bingo: 'data:audio/mp3;base64,SUQzBAAAAAAAI1RTU0UAAAAPAAADTGF2ZjU4LjQ1LjEwMAAAAAAAAAAAAAAA//tAwxAAAAA42B2x2BwAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA...',
+            start: 'data:audio/mp3;base64,SUQzBAAAAAAAI1RTU0UAAAAPAAADTGF2ZjU4LjQ1LjEwMAAAAAAAAAAAAAAA//tAwxAAAAA42B2x2BwAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA...',
+            rank: 'data:audio/mp3;base64,SUQzBAAAAAAAI1RTU0UAAAAPAAADTGF2ZjU4LjQ1LjEwMAAAAAAAAAAAAAAA//tAwxAAAAA42B2x2BwAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA...'
         };
 
         // --- DOM 요소 ---
@@ -449,6 +463,7 @@
             listeners: {},
             audioContext: null,
             soundBuffers: {},
+            currentTurnPlayerId: null,
         };
 
         // --- 사운드 관리 ---
@@ -457,18 +472,31 @@
                 if (state.audioContext) return;
                 try {
                     state.audioContext = new (window.AudioContext || window.webkitAudioContext)();
+                    // 사용자의 첫 인터랙션(클릭 등)이 있을 때 오디오 컨텍스트를 활성화(resume)해야 사파리 등에서 자동 재생이 가능합니다.
+                    if (state.audioContext.state === 'suspended') {
+                        await state.audioContext.resume();
+                    }
+                    // 사운드 파일 로딩
                     for (const key in SOUNDS) {
-                        const response = await fetch(SOUNDS[key]);
-                        const arrayBuffer = await response.arrayBuffer();
-                        state.soundBuffers[key] = await state.audioContext.decodeAudioData(arrayBuffer);
+                        try {
+                            const response = await fetch(SOUNDS[key]);
+                            const arrayBuffer = await response.arrayBuffer();
+                            state.soundBuffers[key] = await state.audioContext.decodeAudioData(arrayBuffer);
+                        } catch (e) {
+                            console.error(`Error decoding audio data for ${key}:`, e);
+                        }
                     }
                 } catch (e) {
                     console.error("Web Audio API is not supported or user hasn't interacted yet.", e);
+                    // 오디오 컨텍스트 생성 실패 시, isMuted를 true로 유지하여 play 호출을 막습니다.
+                    state.isMuted = true;
+                    dom.soundToggle.textContent = '🔇';
                 }
             }
 
             static play(soundName) {
                 if (state.isMuted || !state.audioContext || !state.soundBuffers[soundName]) return;
+                // 오디오 컨텍스트가 다시 suspended 상태가 될 수 있으므로 재생 전에 확인하고 resume합니다.
                 if (state.audioContext.state === 'suspended') {
                     state.audioContext.resume();
                 }
@@ -543,7 +571,7 @@
             }
         }
 
-        function updatePlayerList(players) {
+        function updatePlayerList(players, currentTurnPlayerId) {
             dom.playerList.innerHTML = '';
             const playerArray = Object.values(players || {});
             let onlineCount = 0;
@@ -551,6 +579,9 @@
                 const li = document.createElement('li');
                 const statusClass = player.isOnline ? '' : 'offline';
                 li.innerHTML = `<span style="display:flex; align-items:center;"><span class="player-status ${statusClass}"></span>${player.name}</span>`;
+                if (player.id === currentTurnPlayerId) {
+                    li.classList.add('current-turn');
+                }
                 dom.playerList.appendChild(li);
                 if(player.isOnline) onlineCount++;
             });
@@ -610,12 +641,15 @@
                     gameState: 'waiting', // waiting, playing, finished
                     requiredLines: 3,
                     createdAt: firebase.database.ServerValue.TIMESTAMP,
-                    adminId: state.user.uid
+                    adminId: state.user.uid,
+                    currentTurnPlayerId: null,
+                    playerOrder: []
                 },
                 topics: {
                     allTopics: KDC_TOPICS,
                     calledTopics: ['FREE'],
-                    currentTopic: '게임 시작 대기 중'
+                    currentTopic: '게임 시작 대기 중',
+                    lastCaller: ''
                 },
                 players: {}
             });
@@ -648,6 +682,12 @@
                     alert("존재하지 않는 게임 룸입니다.");
                     return;
                 }
+                
+                const gameState = snapshot.child('config/gameState').val();
+                if (gameState === 'playing' || gameState === 'finished') {
+                    alert("이미 시작되었거나 종료된 게임에는 참가할 수 없습니다.");
+                    return;
+                }
 
                 showScreen(dom.gameScreen);
                 dom.adminControls.classList.add('hidden');
@@ -678,13 +718,14 @@
         }
         
         function attachListeners() {
-            if (state.listeners.config) return; // 이미 리스너가 연결된 경우 중복 방지
+            if (state.listeners.config) return; 
 
             const configRef = state.gameRef.child('config');
             configRef.on('value', (snapshot) => {
                 const config = snapshot.val();
                 if (!config) return;
 
+                state.currentTurnPlayerId = config.currentTurnPlayerId;
                 dom.requiredLinesSlider.value = config.requiredLines;
                 dom.requiredLinesValue.textContent = config.requiredLines;
                 
@@ -692,13 +733,14 @@
                 switch(config.gameState) {
                     case 'waiting': title = '대기 중...'; break;
                     case 'playing': title = '게임 중!'; break;
-                    case 'finished': title = `게임 종료! 우승자: ${config.winner || ''}`; break;
+                    case 'finished': title = `게임 종료! 우승자: ${config.winner || ''}`;
                 }
                 dom.gameStateTitle.textContent = title;
 
+                const isMyTurn = state.user && config.currentTurnPlayerId === state.user.uid;
+                dom.callTopicBtn.disabled = !(isMyTurn && config.gameState === 'playing');
                 if (state.isAdmin) {
                     dom.startGameBtn.disabled = config.gameState === 'playing';
-                    dom.callTopicBtn.disabled = config.gameState !== 'playing';
                 }
                 
                 if (config.gameState === 'finished' && config.winnerId === state.user.uid) {
@@ -707,6 +749,11 @@
                     SoundManager.play('bingo');
                     setTimeout(() => dom.celebration.classList.add('hidden'), 2000);
                 }
+                
+                // 플레이어 목록 업데이트 시 현재 턴인 플레이어 정보 전달
+                state.gameRef.child('players').once('value', (playerSnap) => {
+                    updatePlayerList(playerSnap.val(), config.currentTurnPlayerId);
+                });
             });
             state.listeners.config = configRef;
 
@@ -714,7 +761,11 @@
             topicsRef.on('value', (snapshot) => {
                 const topics = snapshot.val();
                 if (!topics) return;
-                dom.currentTopicDisplay.textContent = topics.currentTopic;
+                if (topics.lastCaller) {
+                    dom.currentTopicDisplay.innerHTML = `<span class="turn-info">'${topics.lastCaller}'님의 선택</span>${topics.currentTopic}`;
+                } else {
+                    dom.currentTopicDisplay.textContent = topics.currentTopic;
+                }
                 if (!state.isAdmin) {
                     updateBingoGrid(topics.calledTopics);
                 }
@@ -724,7 +775,7 @@
             const playersRef = state.gameRef.child('players');
             playersRef.on('value', (snapshot) => {
                 const players = snapshot.val();
-                updatePlayerList(players);
+                updatePlayerList(players, state.currentTurnPlayerId);
                 updateLeaderboard(players);
             });
             state.listeners.players = playersRef;
@@ -795,23 +846,56 @@
             }
         }
 
-        // --- Admin Functions ---
+        // --- Admin & Player Turn Functions ---
         function startGame() {
-            state.gameRef.child('config/gameState').set('playing');
-            SoundManager.play('start');
+            state.gameRef.child('players').once('value', (snapshot) => {
+                const players = snapshot.val();
+                if (!players) {
+                    alert("참가자가 없습니다. 게임을 시작할 수 없습니다.");
+                    return;
+                }
+                const playerIds = Object.keys(players);
+                // 플레이어 순서 섞기
+                const shuffledPlayerIds = playerIds.sort(() => 0.5 - Math.random());
+                
+                state.gameRef.child('config').update({
+                    gameState: 'playing',
+                    playerOrder: shuffledPlayerIds,
+                    currentTurnPlayerId: shuffledPlayerIds[0]
+                });
+                SoundManager.play('start');
+            });
         }
 
         function callTopic() {
-            state.gameRef.child('topics').once('value', (snapshot) => {
-                const topics = snapshot.val();
+            state.gameRef.once('value', (snapshot) => {
+                const gameData = snapshot.val();
+                const config = gameData.config;
+                const topics = gameData.topics;
+                const players = gameData.players;
+
+                // 현재 턴인 플레이어인지 다시 확인
+                if (config.currentTurnPlayerId !== state.user.uid) {
+                    alert("아직 당신의 턴이 아닙니다.");
+                    return;
+                }
+
                 const uncalled = topics.allTopics.filter(t => !topics.calledTopics.includes(t));
                 
                 if (uncalled.length > 0) {
                     const newTopic = uncalled[Math.floor(Math.random() * uncalled.length)];
                     const newCalledTopics = [...topics.calledTopics, newTopic];
-                    state.gameRef.child('topics').update({
-                        currentTopic: newTopic,
-                        calledTopics: newCalledTopics
+                    
+                    // 다음 턴 플레이어 결정
+                    const currentPlayerIndex = config.playerOrder.indexOf(config.currentTurnPlayerId);
+                    const nextPlayerIndex = (currentPlayerIndex + 1) % config.playerOrder.length;
+                    const nextPlayerId = config.playerOrder[nextPlayerIndex];
+
+                    state.gameRef.update({
+                        'topics/currentTopic': newTopic,
+                        'topics/calledTopics': newCalledTopics,
+                        'topics/lastCaller': players[state.user.uid].name,
+                        'config/currentTurnPlayerId': nextPlayerId
                     });
                     SoundManager.play('topic');
                 } else {
@@ -829,8 +913,7 @@
             }
         }
 
-        // --- Event Listeners ---
-        dom.adminModeBtn.addEventListener('click', async () => {
+        // --- Event Listeners ---\n        dom.adminModeBtn.addEventListener('click', async () => {
             await SoundManager.init();
             createGame();
         });
@@ -867,12 +950,20 @@
             });
         });
 
-        dom.soundToggle.addEventListener('click', () => {
+        dom.soundToggle.addEventListener('click', async () => {
+            // 사운드 초기화가 안된 경우, 토글 시 초기화 시도
+            if (!state.audioContext) {
+                await SoundManager.init();
+            }
+            
+            // 초기화 후에도 컨텍스트가 없으면(사용자 거부 등) 더 이상 진행하지 않음
+            if (!state.audioContext) {
+                alert("브라우저에서 오디오를 재생할 수 없습니다. 설정을 확인해주세요.");
+                return;
+            }
+
             state.isMuted = !state.isMuted;
             dom.soundToggle.textContent = state.isMuted ? '🔇' : '🔊';
-            if (!state.isMuted && !state.audioContext) {
-                SoundManager.init();
-            }
         });
         
         // --- Initialization ---
