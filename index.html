@@ -968,15 +968,15 @@
         
         // --- Initialization ---
         function initializeApp() {
-            if (typeof window.firebaseConfig === 'undefined' || Object.keys(window.firebaseConfig).length === 0 || !window.firebaseConfig.apiKey || window.firebaseConfig.apiKey === "YOUR_API_KEY") {
+            if (typeof window.firebaseConfig === 'undefined' || Object.keys(window.firebaseConfig).length === 0 || !window.firebaseConfig.apiKey || window.firebaseConfig.apiKey.startsWith("YOUR")) {
                 document.body.innerHTML = `
                     <div style="position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: linear-gradient(135deg, #4e54c8, #8f94fb); color: white; display: flex; justify-content: center; align-items: center; text-align: center; font-family: sans-serif;">
                         <div style="background: rgba(0,0,0,0.3); padding: 40px; border-radius: 16px;">
                             <h1>🔥 Firebase 설정 필요</h1>
                             <p style="max-width: 500px; margin-top: 20px; line-height: 1.6;">
-                                이 빙고 게임을 실행하려면 <code>firebase-config.js</code> 파일을 수정해야 합니다.<br/><br/>
-                                Firebase Console에서 복사한 구성 객체를<br/>
-                                <code>firebase-config.js</code> 파일에 붙여넣어 주세요.
+                                <code>firebase-config.js</code> 파일이 없거나 설정이 올바르지 않습니다.<br/><br/>
+                                Firebase Console에서 복사한 구성 객체로<br/>
+                                <code>firebase-config.js</code> 파일을 올바르게 설정해주세요.
                             </p>
                         </div>
                     </div>
